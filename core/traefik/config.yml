@@ -1,0 +1,543 @@
+http:
+ #region routers 
+  routers:
+    frigate:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`frigate.example.com`)"
+      service: frigate-service
+      middlewares:
+        - https-redirect@file
+        - default-headers@file
+        - forward-auth@docker
+        - frigate-headers@file
+        - frigate-admin@file
+      tls:
+        certResolver: cloudflare
+        options: default 
+    frigate-local:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`frigate.local.example.com`)"
+      service: frigate-service
+      middlewares:
+        - https-redirect@file
+        - default-headers@file
+        - forward-auth-local@docker
+        - frigate-headers@file
+        - frigate-admin@file
+      tls:
+        certResolver: cloudflare
+        options: default
+    param:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`param.example.com`)"
+      middlewares:
+        - default-headers@file
+        - forward-auth@docker
+      tls:
+        options: default
+        certresolver: cloudflare
+      service: param
+    param-local:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`param.local.example.com`)"
+      middlewares:
+        - forward-auth-local@docker
+        - internal@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: param
+    proxmox:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`proxmox.example.com`)"
+      middlewares:
+        - default-headers@file
+        - forward-auth@docker
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: proxmox
+    proxmox-local:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`proxmox.local.example.com`)"
+      middlewares:
+        - forward-auth-local@docker
+        - internal@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: proxmox   
+    machinaris:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`machinaris.example.com`)"
+      middlewares:
+        - default-headers@file
+        - forward-auth@docker
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: machinaris
+    machinaris-local:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`machinaris.local.example.com`)"
+      middlewares:
+        - forward-auth-local@docker
+        - internal@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: machinaris
+    proxmox_dns:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`proxmoxdns.example.com`)"
+      middlewares:
+        - default-headers@file
+        - forward-auth@docker
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: proxmoxdns
+    proxmox_dns_local:
+      entryPoints:
+        - https
+      rule: "Host(`proxmoxdns.local.example.com`)"
+      middlewares:
+        - default-headers@file
+        - forward-auth-local@docker
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: proxmoxdns      
+    adguard:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`adguard.example.com`)"
+      middlewares:
+        - default-headers@file
+        - https-redirect@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: adguard
+    adguard_doh:
+      entryPoints:
+        - http
+        - https
+      rule: "(Host(`adguard.example.com`) && PathPrefix(`/dns-query`)) || (Host(`adguard.local.example.com`) && PathPrefix(`/dns-query`)) "
+      middlewares:
+        - default-headers@file
+        - https-redirect@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: adguard_doh
+    adguard-local:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`adguard.local.example.com`)"
+      middlewares:
+        - default-headers@file
+        - https-redirect@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: adguard
+    adguard2:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`adguard2.local.example.com`) || Host(`adguard2.example.com`)"
+      middlewares:
+        - default-headers@file
+        - https-redirect@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: adguard2
+    adguard3:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`adguard3.local.example.com`) || Host(`adguard3.example.com`)"
+      middlewares:
+        - default-headers@file
+        - https-redirect@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: adguard3
+    adguard4:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`adguard4.local.example.com`) || Host(`adguard4.example.com`)"
+      middlewares:
+        - default-headers@file
+        - https-redirect@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: adguard4
+    plex:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`plex.example.com`)"
+      middlewares:
+        - default-headers@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: plex
+    plex-local:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`plex.local.example.com`)"
+      middlewares:
+        - default-headers@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: plex  
+    homeassistant-local:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`homeassistant.local.example.com`)"
+      middlewares:
+        - homeassistant-headers
+        - https-redirect@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: homeassistant-local
+    homeassistant:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`homeassistant.example.com`)"
+      middlewares:
+        - homeassistant-headers
+        - https-redirect@file
+      tls:
+        options: default
+        certresolver: cloudflare
+      service: homeassistant
+    aloy-local:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`aloy.local.example.com`)"
+      middlewares:
+        - homeassistant-headers
+        - https-redirect@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: aloy-local
+    aloy:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`aloy.example.com`)"
+      middlewares:
+        - homeassistant-headers
+        - https-redirect@file
+      tls:
+        options: default
+        certresolver: cloudflare
+      service: aloy      
+    roon:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`roon.local.example.com`)"
+      middlewares:
+        - internal@file
+      tls:
+        options: default
+        certresolver: cloudflare        
+      service: roon 
+    param-wildcard-fallback:
+      entryPoints:
+        - http
+        - https
+      rule: "Host(`*.example.com`) || Host(`*.local.example.com`) || Host(`*.example.ca`) || Host(`*.local.example.ca`) || Host(`*.example.com`) || Host(`*.local.example.com`) "
+      priority: 1
+      tls:
+        options: default
+        certresolver: cloudflare
+        domains:
+          - main: "example.com"
+            sans:
+              - "*.example.com"
+          - main: "local.example.com"
+            sans:
+              - "*.local.example.com"
+          - main: "example.ca"
+            sans:
+              - "*.example.ca"
+          - main: "local.example.ca"
+            sans:
+              - "*.local.example.ca"
+          - main: "example.com"
+            sans:
+              - "*.example.com"
+          - main: "local.example.com"
+            sans:
+              - "*.local.example.com"
+      service: downstream-param
+#endregion
+
+#region services
+  services:
+    downstream-param:
+      loadBalancer:
+        servers:
+          - url: https://10.10.9.2:443
+    frigate-service:
+      loadBalancer:
+        servers:
+          - url: https://192.168.11.3:8971
+    param:
+      loadBalancer:
+        servers:
+          - url: "https://10.10.9.2:1443"
+        passHostHeader: true
+    proxmox:
+      loadBalancer:
+        servers:
+          - url: "https://192.168.2.2:8006"
+        passHostHeader: true
+    machinaris:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.2.5:8926"
+        passHostHeader: true
+    proxmoxdns:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.2.3:80"
+        passHostHeader: true
+    adguard:
+      loadBalancer:
+        servers:
+          - url: "https://192.168.12.3:443"         
+        passHostHeader: true
+    adguard_doh:
+      failover:
+        service: chicago_pis
+        fallback: canada_pis
+
+    # ----------------------------------------------------
+    # LOCAL CHICAGO PIS
+    # ----------------------------------------------------
+    chicago_pis:
+      loadBalancer:
+        passHostHeader: true
+        healthCheck:
+          path: "/"
+          interval: 10s
+          timeout: 3s
+        servers:
+          - url: "https://10.10.12.3:443/dns-query"
+          - url: "https://10.10.12.4:443/dns-query"
+
+    # ----------------------------------------------------
+    # REMOTE CANADA PIS
+    # ----------------------------------------------------
+    canada_pis:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: "https://192.168.12.3:443/dns-query"
+          - url: "https://192.168.12.4:443/dns-query"
+    adguard2:
+      loadBalancer:
+        servers:
+          - url: "https://192.168.12.4:443"
+        passHostHeader: true
+    adguard3:
+      loadBalancer:
+        servers:
+          - url: "https://10.10.12.3:443"
+        passHostHeader: true
+    adguard4:
+      loadBalancer:
+        servers:
+          - url: "https://10.10.12.4:443"
+        passHostHeader: true
+    plex:
+      loadBalancer:
+        servers:
+          - url: "https://10.10.9.2:32400"
+        passHostHeader: true     
+    homeassistant-local:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.11.2:8123"
+    homeassistant:
+      loadBalancer:
+        servers:
+          - url: "http://192.168.11.2:8123"
+    aloy-local:
+      loadBalancer:
+        servers:
+          - url: "http://10.10.11.2:8123"
+    aloy:
+      loadBalancer:
+        servers:
+          - url: "http://10.10.11.2:8123"          
+    roon:
+      loadBalancer:
+        servers:
+          - url: "http://10.10.9.2:3000"
+        passHostHeader: true          
+#endregion
+
+  middlewares:
+    https-redirect:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    crowdsec-stable-bouncer:
+      plugin:
+        bouncer:
+          enabled: true
+          logLevel: INFO
+          LogFilePath: "/var/log/bouncer.log"
+          crowdseclapikey: '{{ env "CROWDSEC_API_KEY" }}'
+          crowdseclapischeme: https
+          crowdseclapihost: crowdsec.local.example.com
+          crowdsecappsecenabled: false
+          crowdsecappsechost: crowdsec:7422
+          crowdseclapitlscertificateauthorityfile: /etc/ssl/certs/ca-certificates.crt
+          redisCacheEnabled: false
+          DefaultDecisionSeconds: 3
+          captchaProvider: recaptcha
+          captchaSiteKey: '{{ env "CAPTCHA_SITE_KEY" }}'
+          captchaSecretKey: '{{ env "CAPTCHA_SECRET_KEY" }}'
+          captchaGracePeriodSeconds: 1800
+          captchaHTMLFilePath: /captcha.html
+          banHTMLFilePath: /ban.html
+          ## This list should be in sync with whitelist.yaml for Crowdsec          
+          clienttrustedips:
+            # Param
+            - "10.10.9.1"
+            - "10.10.9.5"
+            - "10.10.9.2/32"
+            - "fd00:1234:10:9::2"
+            # Home Assistant
+            - "192.168.11.2/32"
+            - "fd00:1234:11::2"
+            # Docker net reverse_proxy
+            - "172.19.0.0/16"
+            - "fd64:b93:59ea::/64"  
+            # Primary LAN
+            - "10.10.1.0/24"
+            - "fd00:1234:10:1::/64"
+          forwardedheaderstrustedips:
+            - "127.0.0.1/32"
+            - "10.10.9.5/32"
+            - "10.10.9.2/32"
+            # KC_CF_DYNAMIC_START
+            # KC_CF_DYNAMIC_END     
+    frigate-headers:
+      headers:
+        customRequestHeaders:
+          X-Proxy-Secret: '{{ env "FRIGATE_PROXY_SECRET" }}'
+          
+    frigate-admin:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Groups: admin
+          
+    default-headers:
+      headers:
+        sslRedirect: true
+        contentTypeNosniff: true
+        forceSTSHeader: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 63072000
+        customFrameOptionsValue: SAMEORIGIN
+        customRequestHeaders:
+          X-Forwarded-Proto: https
+
+    homeassistant-headers:
+      headers:
+        browserXssFilter: true
+        contentTypeNosniff: true
+        frameDeny: true
+        sslRedirect: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 63072000
+        customFrameOptionsValue: SAMEORIGIN
+
+    internal-ipwhitelist:
+      IPAllowList:
+        sourceRange:
+          # localhost
+          - "127.0.0.1/32"
+          # Primary LAN          
+          - "10.10.1.0/24"
+          - "fd00:1234:10:1::/64"
+          - "10.20.1.0/24"
+          - "fd00:1234:20:1::/64"
+          # Vishnu
+          - "10.10.3.0/24"
+          - "fd00:1234:10:3::/64"
+          # Param
+          - "10.10.9.1"          
+          - "10.10.9.2"
+          - "fd00:1234:10:9::2"
+          # Home Assistant
+          - "192.168.11.2"
+          - "fd00:1234:11::2"          
+          # Docker reverse proxy
+          - "172.19.0.0/16"
+          - "fd64:b93:59ea::/64"
+          - "172.21.0.0/16"
+          - "fd64:b93:59ea:1::/64"          
+          # WiFi Man
+          - "192.168.5.1"
+          - "fd37:5753:430c::/64"
+          # NPM reverse proxy
+          - "10.10.9.5"
+          - "fd00:1234:10:9::5"
+
+    internal:
+      chain:
+        middlewares:
+        - internal-ipwhitelist@file
+        - default-headers@file
+        
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+    tlsv13only:
+      minVersion: VersionTLS13

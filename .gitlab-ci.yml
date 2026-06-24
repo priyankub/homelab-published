@@ -1,0 +1,205 @@
+stages:
+  - test
+  - deploy
+  - cron
+  - host_maintenance
+
+# ==========================================
+# 1. TESTING & VALIDATION STAGE
+# ==========================================
+
+secret_detection:
+  stage: test
+  tags:
+    - rpi5
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH
+  script:
+    - echo "Spawning isolated ephemeral Gitleaks scanner..."
+    - docker run --rm -v "$(pwd):/path" zricethezav/gitleaks:v8.18.2 detect --verbose --source="/path"
+
+validate_compose:
+  stage: test
+  tags:
+    - rpi5
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH
+  script:
+    - echo "Validating docker-compose syntax for all core services..."
+    - for dir in core/*/; do if [ -f "${dir}docker-compose.yml" ]; then echo "Validating ${dir}docker-compose.yml..."; cd "$dir" && docker compose config -q && cd ../../; fi; done
+
+validate_yaml:
+  stage: test
+  tags:
+    - rpi5
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH
+  script:
+    - echo "Validating Traefik dynamic and static configuration YAML syntax..."
+    - docker run --rm -v "$(pwd):/workspace" -w /workspace alpine:latest sh -c "apk add --no-cache python3 py3-yaml && python3 -c \"import yaml, sys; [yaml.safe_load(open(f)) for f in sys.argv[1:]]\" core/traefik/traefik.yml core/traefik/config.yml"
+
+validate_python:
+  stage: test
+  tags:
+    - rpi5
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH
+  script:
+    - echo "Validating Python script syntax..."
+    - python3 -m py_compile core/traefik/sync_cloudflare_ips.py
+
+validate_ansible:
+  stage: test
+  tags:
+    - rpi5
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH
+  script:
+    - echo "Validating Ansible playbook syntax..."
+    - docker run --rm -v "$(pwd):/workspace" -w /workspace/provisioning/ansible cytopia/ansible-lint:latest playbook.yml
+
+# ==========================================
+# 2. TARGETED DOCKER DEPLOYMENT STAGE
+# ==========================================
+
+deploy_infrastructure:
+  stage: deploy
+  tags:
+    - rpi5
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - echo "Ensuring canonical dual-stack network fabric exists safely..."
+    - docker network create --ipv6 --subnet=172.20.0.0/16 --subnet=fd01:1234:10::/64 reverse_proxy || true
+
+    # Calculate safe git diff tracking limits even on fresh branch pushes
+    - BEFORE_SHA=${CI_COMMIT_BEFORE_SHA:-HEAD^1}
+    - if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then BEFORE_SHA="HEAD^1"; fi
+    - CHANGED_FILES=$(git diff --name-only $BEFORE_SHA $CI_COMMIT_SHA)
+
+    # LAYER 1: Core DNS Resolver Protection
+    - |
+      echo "Evaluating core/dns deployment..."
+      if echo "$CHANGED_FILES" | grep -q '^core/dns/'; then
+        echo "Changes caught in DNS layer. Executing idempotent update..."
+        cd core/dns && docker compose up -d --remove-orphans && cd ../../
+      else
+        echo "DNS infrastructure unchanged. Bypassing stack to prevent network drop."
+      fi
+
+    # LAYER 2: Boundary Access Controls
+    - |
+      echo "Evaluating core/auth deployment..."
+      if echo "$CHANGED_FILES" | grep -q '^core/auth/'; then
+        echo "Auth configs adjusted. Syncing file configurations to host storage..."
+        sudo mkdir -p /home/user/docker/auth/public /home/user/docker/auth/local
+        sudo cp core/auth/options.public.conf /home/user/docker/auth/public/options.conf
+        sudo cp core/auth/options.local.conf /home/user/docker/auth/local/options.conf
+        cd core/auth && docker compose up -d --remove-orphans && cd ../../
+      else
+        echo "Authentication options unchanged. Skipping."
+      fi
+
+    # LAYER 3: Egress Routing, Threat Mitigation, & Analytics Hot-Swapping
+    - |
+      for dir in core/traefik/ core/security/ core/traefikstats/; do
+        if echo "$CHANGED_FILES" | grep -q "^${dir}"; then
+          echo "Changes caught inside directory boundary: ${dir}. Hot-swapping target containers..."
+          
+          if [ "$dir" = "core/traefik/" ]; then
+            python3 core/traefik/sync_cloudflare_ips.py
+            sudo mkdir -p /home/user/docker/traefik
+            sudo cp core/traefik/config.yml /home/user/docker/traefik/config.yml
+            sudo cp core/traefik/traefik.yml /home/user/docker/traefik/traefik.yml
+            sudo chmod 644 /home/user/docker/traefik/config.yml /home/user/docker/traefik/traefik.yml
+          fi
+          
+          cd "$dir" && docker compose up -d --remove-orphans && cd ../../
+        else
+          echo "No configurations modified for ${dir}. Skipping."
+        fi
+      done
+
+# ==========================================
+# 3. CRON ENGINE STAGE
+# ==========================================
+
+run_renovate:
+  stage: cron
+  tags:
+    - rpi5
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $RENOVATE_TRIGGER == "true"
+    - if: $CI_PIPELINE_SOURCE == "web"
+  script:
+    - echo "Spawning stateless Renovate dependency engine..."
+    - >
+      docker run --rm
+      --add-host="git.example.com:10.10.9.2"
+      -e RENOVATE_PLATFORM=gitlab
+      -e RENOVATE_ENDPOINT=$CI_API_V4_URL
+      -e RENOVATE_TOKEN=${RENOVATE_BOT_TOKEN}
+      -e RENOVATE_AUTODISCOVER=false
+      -e GITHUB_COM_TOKEN=${GITHUB_PUBLIC_TOKEN}
+      -e RENOVATE_REPOSITORIES="yourusername/homelab-infrastructure"
+      -e LOG_LEVEL=debug
+      renovate/renovate:37
+
+cron_sync_cloudflare_ips:
+  stage: cron
+  tags:
+    - rpi5
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $SYNC_IP_TRIGGER == "true"
+    - if: $CI_PIPELINE_SOURCE == "web"
+  script:
+    - echo "Executing background network map alignment..."
+    - python3 core/traefik/sync_cloudflare_ips.py
+    - STATUS=$(cat .sync_status 2>/dev/null || echo "SKIP")
+    - TARGET_CONFIG_PATH=$(docker inspect traefik --format '{{ range .Mounts }}{{ if eq .Destination "/config.yml" }}{{ .Source }}{{ end }}{{ end }}')
+    - TARGET_STATIC_PATH=$(docker inspect traefik --format '{{ range .Mounts }}{{ if eq .Destination "/etc/traefik/traefik.yml" }}{{ .Source }}{{ end }}{{ end }}')
+    - |
+      if [ -n "$TARGET_CONFIG_PATH" ] && ! [ "core/traefik/config.yml" -ef "$TARGET_CONFIG_PATH" ]; then
+        sudo cp core/traefik/config.yml "$TARGET_CONFIG_PATH"
+        sudo chmod 644 "$TARGET_CONFIG_PATH"
+      fi
+    - |
+      if [ "$STATUS" = "RESTART" ]; then
+        if [ -n "$TARGET_STATIC_PATH" ] && ! [ "core/traefik/traefik.yml" -ef "$TARGET_STATIC_PATH" ]; then
+          sudo cp core/traefik/traefik.yml "$TARGET_STATIC_PATH"
+          sudo chmod 644 "$TARGET_STATIC_PATH"
+        fi
+        docker restart traefik
+      elif [ "$STATUS" = "HOT_RELOAD" ]; then
+        echo "Dynamic components hot-reloaded safely."
+      else
+        echo "Cloudflare IP sync skipped or failed. No action required."
+      fi
+
+# ==========================================
+# 4. MAINTENANCE ORCHESTRATION STAGE
+# ==========================================
+
+run_scheduled_node_maintenance:
+  stage: host_maintenance
+  tags:
+    - rpi5
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $MAINTENANCE_TRIGGER == "true"
+    - if: $CI_PIPELINE_SOURCE == "web"
+  script:
+    - ansible-galaxy collection install community.docker --upgrade
+    - cd provisioning/ansible
+    - ansible-playbook -i inventory.ini playbook.yml

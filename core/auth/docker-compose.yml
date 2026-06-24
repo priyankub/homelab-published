@@ -1,0 +1,94 @@
+services:
+  # --- Public Domain Forward Authentication Gateway ---
+  traefik-forward-auth:
+    image: ghcr.io/priyankub/traefik-forward-auth-secure:latest@sha256:33b090a83b789446e6b96a8f4bc725519903965357dc8c41a30cf6fe3b6846ca
+    container_name: traefik-forward-auth
+    restart: unless-stopped
+    networks:
+      - reverse_proxy
+    environment:
+      - TZ=America/Chicago
+      - CONFIG=/config/options.conf
+      # SECRETS INJECTED DIRECTLY INTO CONTAINER MEMORY
+      - SECRET=${FORWARD_AUTH_SECRET}
+      - PROVIDERS_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - PROVIDERS_GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+    volumes:
+      - /home/user/docker/auth/public:/config:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=reverse_proxy"
+      
+      # Routers & Authentication Entry rules
+      - "traefik.http.routers.auth.entrypoints=https"
+      - "traefik.http.routers.auth.rule=Host(`auth.example.com`) || (Host(`example.com`) && PathPrefix(`/login`)) || Host(`auth.example.ca`) || (Host(`example.ca`) && PathPrefix(`/login`)) || (Host(`example.ca`) && PathPrefix(`/_oauth`))"
+      - "traefik.http.routers.auth.tls=true"
+      - "traefik.http.routers.auth.tls.certresolver=cloudflare"
+      - "traefik.http.routers.auth.service=auth-service"
+      
+      # Middlewares & Security Profiles
+      - "traefik.http.routers.auth.middlewares=forward-auth"
+      - "traefik.http.middlewares.forward-auth.forwardauth.address=http://traefik-forward-auth:4181"
+      - "traefik.http.middlewares.forward-auth.forwardauth.trustForwardHeader=true"
+      - "traefik.http.middlewares.forward-auth.forwardauth.authResponseHeaders=X-Forwarded-User"
+      
+      # Logout Mechanics & Cookie Sanitization
+      - "traefik.http.routers.auth-logout.entrypoints=https"
+      - "traefik.http.routers.auth-logout.rule=(Host(`auth.example.com`) && PathPrefix(`/logout`)) || (Host(`example.com`) && PathPrefix(`/logout`)) || (Host(`auth.example.ca`) && PathPrefix(`/logout`)) || (Host(`example.ca`) && PathPrefix(`/logout`))"
+      - "traefik.http.routers.auth-logout.tls=true"
+      - "traefik.http.routers.auth-logout.service=auth-service"
+      - "traefik.http.routers.auth-logout.middlewares=auth-logout"
+      - "traefik.http.middlewares.auth-logout.addPrefix.prefix=/_oauth"
+      - "traefik.http.middlewares.samesite-lax.headers.customResponseHeaders.Set-Cookie=^(_forward_auth=.*)$$ $1; SameSite=Lax"
+      
+      # Load Balancer target definitions
+      - "traefik.http.services.auth-service.loadbalancer.server.port=4181"
+
+  # --- Local Namespace Forward Authentication Gateway (*.local) ---
+  traefik-forward-auth-local:
+    image: ghcr.io/priyankub/traefik-forward-auth-secure:latest@sha256:33b090a83b789446e6b96a8f4bc725519903965357dc8c41a30cf6fe3b6846ca
+    container_name: traefik-forward-auth-local
+    restart: unless-stopped
+    networks:
+      - reverse_proxy
+    environment:
+      - TZ=America/Chicago
+      - CONFIG=/config/options.conf
+      # SECRETS INJECTED DIRECTLY INTO CONTAINER MEMORY
+      - SECRET=${FORWARD_AUTH_SECRET}
+      - PROVIDERS_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - PROVIDERS_GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+    volumes:
+      - /home/user/docker/auth/local:/config:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=reverse_proxy"
+      
+      # Routers & Authentication Entry rules
+      - "traefik.http.routers.auth-local.entrypoints=https"
+      - "traefik.http.routers.auth-local.rule=Host(`auth.local.example.com`) || (Host(`local.example.com`) && PathPrefix(`/login`))"
+      - "traefik.http.routers.auth-local.tls=true"
+      - "traefik.http.routers.auth-local.tls.certresolver=cloudflare"
+      - "traefik.http.routers.auth-local.service=auth-local-service"
+      
+      # Middlewares & Security Profiles
+      - "traefik.http.routers.auth-local.middlewares=forward-auth-local"
+      - "traefik.http.middlewares.forward-auth-local.forwardauth.address=http://traefik-forward-auth-local:4181"
+      - "traefik.http.middlewares.forward-auth-local.forwardauth.trustForwardHeader=true"
+      - "traefik.http.middlewares.forward-auth-local.forwardauth.authResponseHeaders=X-Forwarded-User"
+      
+      # Logout Mechanics
+      - "traefik.http.routers.auth-local-logout.entrypoints=https"
+      - "traefik.http.routers.auth-local-logout.rule=(Host(`auth.local.example.com`) && PathPrefix(`/logout`)) || (Host(`local.example.com`) && PathPrefix(`/logout`))"
+      - "traefik.http.routers.auth-local-logout.tls=true"
+      - "traefik.http.routers.auth-local-logout.service=auth-local-service"
+      - "traefik.http.routers.auth-local-logout.middlewares=auth-local-logout"
+      - "traefik.http.middlewares.auth-local-logout.addPrefix.prefix=/_oauth"
+      
+      # Load Balancer target definitions
+      - "traefik.http.services.auth-local-service.loadbalancer.server.port=4181"
+
+# --- Shared Global Subnet Matrix Definitions ---
+networks:
+  reverse_proxy:
+    external: true

@@ -1,0 +1,68 @@
+api:
+  dashboard: true
+entryPoints:
+  http:
+    address: ":80"
+    forwardedHeaders:
+      trustedIPs:
+        - "127.0.0.1/32"
+        - "10.10.9.5/32"
+        - "10.10.9.2/32"
+        # KC_CF_STATIC_START
+        # KC_CF_STATIC_END   
+    http:
+      middlewares:
+        - crowdsec-stable-bouncer@file
+  https:
+    address: ":443"
+    forwardedHeaders:
+      trustedIPs:
+        - "127.0.0.1/32"
+        - "10.10.9.5/32"
+        - "10.10.9.2/32"
+        # KC_CF_STATIC_START
+        # KC_CF_STATIC_END      
+    http:
+      middlewares:
+        - crowdsec-stable-bouncer@file
+  udp:
+    address: ":61542/udp"
+  metrics:
+    address: ":8312"
+serversTransport:
+  insecureSkipVerify: true
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+  file:
+    filename: /config.yml
+certificatesResolvers:
+  cloudflare:
+    acme:
+      email: admin@example.com
+      storage: acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
+
+log:
+  filePath: /var/log/log-file.log
+  level: ERROR
+accessLog:
+  filePath: /var/log/access.log
+  format: json
+  bufferingSize: 0
+experimental:
+  plugins:
+    traefik-real-ip:
+      moduleName: github.com/soulbalz/traefik-real-ip
+      version: v1.0.3
+    bouncer:
+      moduleName: github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin
+      version: v1.6.0
+hub:
+  tls:
+    insecure: true

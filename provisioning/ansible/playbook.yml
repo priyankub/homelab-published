@@ -1,0 +1,122 @@
+---
+- name: Immutable Host Maintenance & Pruning Cycle
+  hosts: nodes
+  become: true
+  gather_facts: true
+
+  handlers:
+    - name: Restart docker
+      ansible.builtin.service:
+        name: docker
+        state: restarted
+
+    - name: Warn reboot
+      ansible.builtin.debug:
+        msg: "CRITICAL: A system reboot has been scheduled for 1 minute from now. Network services will briefly go offline."
+
+  tasks:
+    # --- LAYER 1: AUTOMATED SECURITY PATCHING SEEDS ---
+    - name: Ensure automated core patching utilities are present
+      ansible.builtin.apt:
+        name:
+          - unattended-upgrades
+          - apt-listchanges
+        state: present
+        update_cache: true
+
+    - name: Seed persistent unattended-upgrades security rule profiles
+      ansible.builtin.copy:
+        src: files/50unattended-upgrades
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Seed cron timing interval drivers for apt updates
+      ansible.builtin.copy:
+        src: files/20auto-upgrades
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        owner: root
+        group: root
+        mode: '0644'
+
+# --- LAYER 2: INTERACTIVE SCHEDULED APT BUMPS ---
+    - name: Hold gitlab-runner to prevent self-upgrade pipeline termination
+      ansible.builtin.dpkg_selections:
+        name: gitlab-runner
+        selection: hold
+
+    - name: Execute clean non-disruptive safe upgrade on host binaries
+      ansible.builtin.apt:
+        upgrade: safe
+        update_cache: true
+      register: apt_upgrade_output
+
+    - name: Force purge obsolete structural packages and dependencies (autoremove)
+      ansible.builtin.apt:
+        autoremove: true
+        purge: true
+
+    # --- LAYER 3: DOCKER DISK PURGING LOOP ---
+    - name: Enforce global Docker daemon log rotation caps host-wide
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "10m",
+              "max-file": "3"
+            }
+          }
+      notify: Restart docker
+      register: docker_daemon_config
+
+    - name: Clear cached dangling Docker build artifacts and pulled image layers
+      community.docker.docker_prune:
+        containers: true
+        images: true
+        images_filters:
+          dangling: "true"
+        networks: true
+        volumes: false
+      register: docker_prune_output
+
+    # --- LAYER 4: STATE VERIFICATION ---
+    - name: Check if kernel alterations or system updates dictate a pending reboot
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_state
+
+    - name: Surface host maintenance metric report summary
+      ansible.builtin.debug:
+        msg:
+          - "Host Processing Complete: {{ inventory_hostname }}"
+          - "Apt Changes Applied: {{ apt_upgrade_output.changed }}"
+          - "Docker Layers Purged: {{ docker_prune_output.images_pruned | default('0') }} layers dropped"
+          - "System Reboot Required: {{ reboot_state.stat.exists | string | upper }}"
+
+    # --- LAYER 5: LOCAL DETACHED REBOOT ---
+    - name: Schedule a delayed local host reboot if required by system patches
+      ansible.builtin.command: shutdown -r +1 'GitOps Scheduled Maintenance Reboot'
+      when: reboot_state.stat.exists
+      notify: Warn reboot
+      register: reboot_scheduled
+
+    # --- LAYER 6: CONTROLLED RUNNER UPGRADE (OPTIONAL) ---
+    - name: Unhold gitlab-runner to allow updates
+      ansible.builtin.dpkg_selections:
+        name: gitlab-runner
+        selection: install
+
+    # This will still cut the log short, but only after 100% of your other maintenance tasks have succeeded
+    - name: Update gitlab-runner at the very end of the cycle # noqa: package-latest
+      ansible.builtin.apt:
+        name: gitlab-runner
+        state: latest
+      async: 10
+      poll: 0
+# EOF

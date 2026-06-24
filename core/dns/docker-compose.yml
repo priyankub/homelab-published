@@ -1,0 +1,47 @@
+services:
+  adguard_unbound:
+    image: ghcr.io/priyankub/adguardhome_unbound:latest@sha256:68f44a8507de37be9d06e57c5b652433b5285cf97cf72d12be1fbebedc8a1ebb
+    container_name: adguard_unbound
+    restart: unless-stopped
+    networks:
+      reverse_proxy:
+        ipv4_address: 172.20.0.3
+        ipv6_address: fd01:1234:10::3
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "853:853/tcp"   # DNS-over-TLS (DoT)
+      # commenting these out now that initial setup and testing is over to limit port exposure
+      #- "180:80/tcp" 
+      #- "3000:3000/tcp"
+    volumes:
+      - /home/user/docker/dns/adguard_data:/opt/AdGuardHome/work
+      - /home/user/docker/dns/adguard_config:/opt/AdGuardHome/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.clusterguard.rule=Host(`clusterguard.example.com`) || Host(`clusterguard.local.example.com`)"
+      - "traefik.http.routers.clusterguard.middlewares=https-redirect@file, default-headers@file, forward-auth"
+      - "traefik.http.routers.clusterguard.entrypoints=https"
+      - "traefik.http.routers.clusterguard.tls=true"
+      - "traefik.http.services.clusterguard.loadbalancer.server.port=80"
+      - "traefik.http.services.clusterguard.loadbalancer.server.scheme=http"
+
+  # --- Automated Certificate Extractor ---
+  certs-dumper:
+    image: ghcr.io/kereis/traefik-certs-dumper:latest@sha256:de77fe83f31e74fc2910083813c7d2418eedaebdbfb8a0b90df285721d253421
+    container_name: traefik_certs_dumper
+    restart: unless-stopped
+    network_mode: none # Completely isolated; needs no network stack to parse files
+    environment:
+      - WATCH=true
+      - TRAEFIK_VERSION=v3 # Explicitly targets your Traefik v3 JSON schema
+      - DOMAIN=clusterguard.example.com
+    volumes:
+      # Mount the active acme.json file from your Traefik folder (Adjust path if your acme.json sits in a different subfolder)
+      - /home/user/docker/traefik/data/acme.json:/traefik/acme.json:ro
+      # Dump the flat files straight into AdGuard's persistent config directory
+      - /home/user/docker/dns/adguard_config/certs:/output
+
+networks:
+  reverse_proxy:
+    external: true

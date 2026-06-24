@@ -1,0 +1,55 @@
+services:
+  # --- Init Container: Waits for DNS to be reachable ---
+  wait-for-dns:
+    image: busybox:latest@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d
+    container_name: crowdsec-wait-for-dns
+    networks:
+      - reverse_proxy
+    command: >
+      sh -c "
+        echo 'Waiting for local AdGuard DNS (adguard_unbound)...';
+        until nc -z -w 2 adguard_unbound 53; do sleep 2; done;
+        echo 'Local DNS is reachable. Continuing startup.';
+      "
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.7.8@sha256:2f527c9bb8b367120eb08b82890aa912ce96bfa1ada93dda0721700e4b4e0dde
+    container_name: crowdsec
+    restart: unless-stopped
+    depends_on:
+      wait-for-dns:
+        condition: service_completed_successfully
+    environment:
+      - DISABLE_LOCAL_API=true
+      # Using the exact image-specific variables you used earlier
+      - LOCAL_API_URL=https://crowdsec.local.example.com
+      - AGENT_USERNAME=rpi5
+      - AGENT_PASSWORD=${CROWDSEC_INTER_NODE_PASSWORD}
+      # Tuned strictly to your new edge router logs
+      - COLLECTIONS=crowdsecurity/traefik
+    volumes:
+      - ./acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - /home/user/docker/security/crowdsec_data:/var/lib/crowdsec/data
+      - /home/user/docker/traefik/log:/var/log/traefik:ro
+    extra_hosts:
+      - "crowdsec.local.example.com:10.10.9.2" #Should be updated to point to LAPI
+    networks:
+      - reverse_proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=reverse_proxy"
+      
+      # --- Router Definition ---
+      - "traefik.http.routers.crowdsec-metrics.entrypoints=https"
+      - "traefik.http.routers.crowdsec-metrics.rule=Host(`cs-rpi5.local.example.com`)"
+      - "traefik.http.routers.crowdsec-metrics.tls=true"
+      - "traefik.http.routers.crowdsec-metrics.tls.certresolver=cloudflare"
+      
+      # --- Security: Restrict scraping strictly to your local/internal IPs ---
+      - "traefik.http.routers.crowdsec-metrics.middlewares=internal@file"
+      
+      # --- Backend Service (CrowdSec exposes prometheus metrics on 6060) ---
+      - "traefik.http.services.crowdsec-metrics.loadbalancer.server.port=6060"
+networks:
+  reverse_proxy:
+    external: true

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "prHourlyLimit": 0,
+  "prConcurrentLimit": 0,
+  "docker-compose": {
+    "fileMatch": ["(^|/)docker-compose\\.yml$"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["(^|/)traefik\\.yml$"],
+      "matchStrings": [
+        "moduleName: github\\.com/(?<depName>[\\w-]+/[\\w-]+)\\s+version: (?<currentValue>v?[\\d\\.]+)"
+      ],
+      "datasourceTemplate": "github-releases"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchDatasources": ["docker"],
+      "pinDigests": true,
+      "description": "Force Renovate to lock mutable tags like latest down to exact SHA256 hashes."
+    },
+    {
+      "matchPackageNames": ["postgres"],
+      "pinDigests": false,
+      "description": "Prevent pinning Postgres to exact digests to keep the compose files human-readable."
+    },
+    {
+      "matchFileNames": ["**/traefik.yml"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false,
+      "description": "Prevent breaking changes by blocking major version updates for Traefik plugins."
+    },
+    {
+      "matchPackagePatterns": ["*"],
+      "groupName": "All Homelab Dependencies",
+      "groupSlug": "all-homelab-deps",
+      "description": "Squash all incoming dependency updates into a single consolidated merge request to eliminate pipeline noise."
+    }
+  ],
+  "timezone": "America/Chicago"
+}
