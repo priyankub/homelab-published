@@ -1,7 +1,7 @@
 services:
   # --- Init Container: Pulls Latest CrowdSec Bouncer Assets ---
   bouncer-assets-init:
-    image: alpine:latest@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+    image: alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
     container_name: bouncer-assets-init
     user: "root"
     volumes:
@@ -17,7 +17,7 @@ services:
 
   # --- Init Container: Waits for DNS to be reachable ---
   wait-for-dns:
-    image: busybox:latest@sha256:fd8d9aa63ba2f0982b5304e1ee8d3b90a210bc1ffb5314d980eb6962f1a9715d
+    image: busybox:latest@sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e
     container_name: traefik-wait-for-dns
     networks:
       - reverse_proxy
@@ -30,7 +30,7 @@ services:
 
   # --- Main Edge Routing Gateway ---
   traefik:
-    image: traefik:v3.7@sha256:e4d98158c01ad752fc1071d4e9573788747230d902cdde00a772516e692d07c9
+    image: traefik:v3.7@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0
     container_name: traefik
     restart: unless-stopped
     hostname: rpi5
@@ -90,7 +90,7 @@ services:
       - "traefik.http.routers.traefik-local.middlewares=https-redirect@file, forward-auth-local, default-headers@file"
 # --- Containerized IaC Logrotate Sidecar ---
   logrotate:
-    image: alpine:latest@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+    image: alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
     container_name: traefik_logrotate
     restart: unless-stopped
     volumes:

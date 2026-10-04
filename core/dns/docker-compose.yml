@@ -1,6 +1,6 @@
 services:
   adguard_unbound:
-    image: ghcr.io/priyankub/adguardhome_unbound:latest@sha256:68f44a8507de37be9d06e57c5b652433b5285cf97cf72d12be1fbebedc8a1ebb
+    image: ghcr.io/priyankub/adguardhome_unbound:latest@sha256:9a3f8531d5e40e9e85d075a3abaf1ff764f9781d1e8ce39991c1c96a3b73365a
     container_name: adguard_unbound
     restart: unless-stopped
     networks:
@@ -28,7 +28,7 @@ services:
 
   # --- Automated Certificate Extractor ---
   certs-dumper:
-    image: ghcr.io/kereis/traefik-certs-dumper:latest@sha256:de77fe83f31e74fc2910083813c7d2418eedaebdbfb8a0b90df285721d253421
+    image: ghcr.io/kereis/traefik-certs-dumper:latest@sha256:21fd1c380bfe6a659593410d8fd5f845a7600b80386a7c1edb2218c377aff366
     container_name: traefik_certs_dumper
     restart: unless-stopped
     network_mode: none # Completely isolated; needs no network stack to parse files
