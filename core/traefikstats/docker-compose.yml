@@ -13,7 +13,7 @@ services:
       - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_INIT_PASSWORD}
       - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_INIT_USERNAME}
     hostname: influxdb
-    image: influxdb:2.9-alpine@sha256:243d7adc3edc2a3f98518e5395a9be725504acb43deb125bdcc78579b5c4bbd8
+    image: influxdb:2.9-alpine@sha256:5e250f6ab3e229d6ac27131fadf3c772f3a510875e8c6f22da017f39684bdcd6
     restart: unless-stopped
     volumes:
       - type: bind
@@ -42,7 +42,7 @@ services:
 
   traefikgraf:
     container_name: traefikgraf
-    image: ghcr.io/priyankub/traefikgrafstats:latest@sha256:6dcde9ed51524f4e9ae7ee33d5980d8ad29d69755b386d35cfbf0b0ae815fc1e
+    image: ghcr.io/priyankub/traefikgrafstats:latest@sha256:e1db248e21f271e00489618f39052312bef19f8fb511c13166a606cba76b96cd
     restart: unless-stopped
     environment:
       - ABUSEIP_KEY=${ABUSEIP_KEY}
@@ -87,7 +87,7 @@ services:
       - GEOIPUPDATE_LICENSE_KEY=${MAXMIND_LICENSE_KEY}
       - TZ=America/Chicago
     hostname: geoipupdate
-    image: ghcr.io/maxmind/geoipupdate:latest@sha256:faecdca22579730ab0b7dea5aa9af350bb3c93cb9d39845c173639ead30346d2
+    image: ghcr.io/maxmind/geoipupdate:latest@sha256:51e70dd6f16cd3e4d845ac02d09940b10772a75b9d741427d235a78570923c1d
     restart: always
     volumes:
       - type: bind
