@@ -1,0 +1,75 @@
+services:
+  # --- Init Container: Waits for DNS to be reachable ---
+  wait-for-dns:
+    image: busybox:latest@sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e
+    container_name: crowdsec-wait-for-dns
+    networks:
+      - reverse_proxy
+    command: >
+      sh -c "
+        echo 'Waiting for local AdGuard DNS (adguard_unbound)...';
+        until nc -z -w 2 adguard_unbound 53; do sleep 2; done;
+        echo 'Local DNS is reachable. Continuing startup.';
+      "
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.8.1@sha256:0f2523fa61ef507f15d953045cface490cc880670c62f2755ced17524107f71a
+    container_name: crowdsec
+    restart: unless-stopped
+    depends_on:
+      wait-for-dns:
+        condition: service_completed_successfully
+    environment:
+      - DISABLE_LOCAL_API=true
+      # Using the exact image-specific variables you used earlier
+      - LOCAL_API_URL=https://lapi.local.example.com:8443
+      - AGENT_USERNAME=rpi5
+      - AGENT_PASSWORD=${CROWDSEC_INTER_NODE_PASSWORD}
+      # Traefik log scenarios (WordPress probes included), plus the AppSec
+      # engine's virtual-patching rules (acquis.yaml's appsec source, queried
+      # by the Traefik bouncer). param's app-log collections (Nextcloud,
+      # Vaultwarden, Grafana) stay there, next to the logs.
+      - COLLECTIONS=crowdsecurity/traefik crowdsecurity/wordpress crowdsecurity/appsec-virtual-patching
+      # App clients make expected requests in bursts (Nextcloud SVG preview
+      # 404s, Jellyfin/Plex thumbnails and transcodes, Overseerr browsing), which
+      # http-probing reads as a scan and captchas the user's own phone.
+      - PARSERS=crowdsecurity/nextcloud-whitelist crowdsecurity/jellyfin-whitelist crowdsecurity/overseerr-whitelist crowdsecurity/plex-allowlist
+    volumes:
+      # Named volume, as on the dnsgaruda cluster: the image only updates its hub
+      # index (collections, AppSec rules) when /etc/crowdsec is a volume -
+      # without one it kept reinstalling the index baked into the image, so the
+      # AppSec virtual patches lagged the hub. Docker seeds a new named volume
+      # from the image; a host bind-mount would shadow it with an empty dir.
+      - crowdsec_config:/etc/crowdsec
+      - ./acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - /home/user/docker/security/crowdsec_data:/var/lib/crowdsec/data
+      - /home/user/docker/traefik/log:/var/log/traefik:ro
+    extra_hosts:
+      # Straight to the dnsgaruda cluster's Traefik (VIP :8443), same as the
+      # Traefik bouncer, so the agent doesn't depend on param being up.
+      - "lapi.local.example.com:10.10.12.5"
+    networks:
+      reverse_proxy:
+        ipv4_address: 172.20.0.6
+        ipv6_address: fd01:1234:10::6
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=reverse_proxy"
+      
+      # --- Router Definition ---
+      - "traefik.http.routers.crowdsec-metrics.entrypoints=https"
+      - "traefik.http.routers.crowdsec-metrics.rule=Host(`cs-rpi5.local.example.com`)"
+      - "traefik.http.routers.crowdsec-metrics.tls=true"
+      - "traefik.http.routers.crowdsec-metrics.tls.certresolver=cloudflare"
+      
+      # --- Security: Restrict scraping strictly to your local/internal IPs ---
+      - "traefik.http.routers.crowdsec-metrics.middlewares=internal@file"
+      
+      # --- Backend Service (CrowdSec exposes prometheus metrics on 6060) ---
+      - "traefik.http.services.crowdsec-metrics.loadbalancer.server.port=6060"
+volumes:
+  crowdsec_config:
+
+networks:
+  reverse_proxy:
+    external: true

@@ -1,0 +1,169 @@
+services:
+  # --- Init Container: Pulls Latest CrowdSec Bouncer Assets ---
+  bouncer-assets-init:
+    image: alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+    container_name: bouncer-assets-init
+    user: "root"
+    environment:
+      # Written to a file (below) so the bouncer plugin reads the LAPI key via
+      # crowdsecLapiKeyFile instead of inline config - keeps it out of Traefik's
+      # /api/http/middlewares response.
+      - CROWDSEC_API_KEY=${CROWDSEC_API_KEY}
+    volumes:
+      - /home/user/docker/traefik/data:/target_dir
+    command: >
+      sh -c "
+        echo 'Fetching upstream CrowdSec Traefik Bouncer remediation pages...';
+        wget -qO /target_dir/captcha.html https://raw.githubusercontent.com/maxlerebourg/crowdsec-bouncer-traefik-plugin/main/captcha.html;
+        wget -qO /target_dir/ban.html https://raw.githubusercontent.com/maxlerebourg/crowdsec-bouncer-traefik-plugin/main/ban.html;
+        chmod 644 /target_dir/captcha.html /target_dir/ban.html;
+        printf '%s' \"$$CROWDSEC_API_KEY\" > /target_dir/lapikey;
+        chmod 600 /target_dir/lapikey;
+        echo 'Remediation assets synchronized successfully.';
+      "
+
+  # --- Init Container: Waits for DNS to be reachable ---
+  wait-for-dns:
+    image: busybox:latest@sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e
+    container_name: traefik-wait-for-dns
+    networks:
+      - reverse_proxy
+    command: >
+      sh -c "
+        echo 'Waiting for local AdGuard DNS (adguard_unbound)...';
+        until nc -z -w 2 adguard_unbound 53; do sleep 2; done;
+        echo 'Local DNS is reachable. Continuing startup.';
+      "
+
+  # --- Main Edge Routing Gateway ---
+  traefik:
+    image: traefik:v3.7@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0
+    container_name: traefik
+    restart: unless-stopped
+    hostname: rpi5
+    security_opt:
+      - no-new-privileges:true    
+    depends_on:
+      bouncer-assets-init:
+        condition: service_completed_successfully
+      wait-for-dns:
+        condition: service_completed_successfully
+
+    extra_hosts:
+      - "crowdsec.local.example.com:10.10.9.2" #Should be updated to point to LAPI
+      # The bouncer plugin's own LAPI/AppSec calls go straight to the dnsgaruda
+      # cluster's Traefik (VIP :8443) instead of back through this Traefik.
+      - "lapi.local.example.com:10.10.12.5"
+      - "appsec.local.example.com:10.10.12.5"
+    networks:
+      reverse_proxy:
+        ipv4_address: 172.20.0.2
+        ipv6_address: fd01:1234:10::2
+    ports:
+      - "80:80/tcp"
+      - "443:443/tcp"
+    environment:
+      # Scoped DNS-edit token (DNS Write + Zone Read on the served zones) for the
+      # cloudflare certResolver, replacing the global API key + email.
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+      - CROWDSEC_API_KEY=${CROWDSEC_API_KEY}
+      - CAPTCHA_SITE_KEY=${CAPTCHA_SITE_KEY}
+      - CAPTCHA_SECRET_KEY=${CAPTCHA_SECRET_KEY}
+      - FRIGATE_PROXY_SECRET=${FRIGATE_PROXY_SECRET}  
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /home/user/docker/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - /home/user/docker/traefik/config.yml:/config.yml:ro
+      - /home/user/docker/traefik/log:/var/log:rw
+      - /home/user/docker/traefik/data/acme.json:/acme.json
+      # Remediation page mappings dynamically populated by the init container
+      - /home/user/docker/traefik/data/captcha.html:/captcha.html:rw
+      - /home/user/docker/traefik/data/ban.html:/ban.html:rw
+      # CrowdSec LAPI key, written by the init container from CROWDSEC_API_KEY
+      # (config.yml references it via crowdsecLapiKeyFile).
+      - /home/user/docker/traefik/data/lapikey:/lapikey:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=reverse_proxy"
+      
+      # --- Router Configuration: Public Dashboard Access ---
+      - "traefik.http.routers.traefik.entrypoints=https"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.example.com`)"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik.tls.options=default"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.middlewares=https-redirect@file, default-headers@file, forward-auth"
+
+      # --- Router Configuration: Local Namespace Dashboard Access (*.local) ---
+      - "traefik.http.routers.traefik-local.entrypoints=https"
+      - "traefik.http.routers.traefik-local.rule=Host(`traefik.local.example.com`)"
+      - "traefik.http.routers.traefik-local.tls=true"
+      - "traefik.http.routers.traefik-local.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik-local.tls.options=default"
+      - "traefik.http.routers.traefik-local.service=api@internal"
+      - "traefik.http.routers.traefik-local.middlewares=https-redirect@file, forward-auth-local, default-headers@file"
+
+      # --- Router Configuration: Prometheus Metrics Scrape Endpoint ---
+      # Restricted to internal/trusted IPs only (see internal-ipwhitelist@file) so the
+      # central Prometheus on param can scrape this node's Traefik metrics remotely.
+      - "traefik.http.routers.traefik-metrics.entrypoints=https"
+      - "traefik.http.routers.traefik-metrics.rule=Host(`tm-rpi5.local.example.com`)"
+      - "traefik.http.routers.traefik-metrics.tls=true"
+      - "traefik.http.routers.traefik-metrics.tls.certresolver=cloudflare"
+      - "traefik.http.routers.traefik-metrics.middlewares=internal@file"
+      - "traefik.http.services.traefik-metrics.loadbalancer.server.port=8312"
+# --- Containerized IaC Logrotate Sidecar ---
+  logrotate:
+    image: alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+    container_name: traefik_logrotate
+    restart: unless-stopped
+    volumes:
+      - /home/user/docker/traefik/log:/var/log/traefik:rw
+      - ./logrotate.conf:/etc/logrotate.d/traefik:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: |
+      sh -c "
+        apk add --no-cache logrotate docker-cli &&
+        # Secure the mounted config permissions into internal container space       
+        cp /etc/logrotate.d/traefik /tmp/traefik.conf &&
+        chmod 644 /tmp/traefik.conf &&        
+        # Override Alpine daily cron script to evaluate our targeted configurations explicitly
+        echo '#!/bin/sh' > /etc/periodic/daily/logrotate &&
+        echo 'logrotate -s /var/log/traefik/logrotate.status /tmp/traefik.conf' >> /etc/periodic/daily/logrotate &&
+        chmod +x /etc/periodic/daily/logrotate &&        
+        echo 'Executing boot-time log rotation check with persistent state tracker...' &&
+        logrotate -s /var/log/traefik/logrotate.status /tmp/traefik.conf || true &&        
+        echo 'Logrotate crond engine initialization complete.' &&
+        exec crond -f -l 2
+      "
+# --- TEMP: HA reachability probe (HA stall investigation, 2026-09-24) ---
+  # Dials HA across the Site Magic tunnel from the host's own IP (same path as
+  # Traefik), with a same-tunnel control, and logs only state changes.
+  ha-probe:
+    image: alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+    container_name: ha_probe
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /home/user/docker/traefik/log:/var/log/traefik:rw
+    command: |
+      sh -c '
+        last=""
+        while true; do
+          nc -z -w 3 192.168.11.2 8123 && ha=UP || ha=DOWN
+          nc -z -w 3 192.168.12.3 443 && ctl=UP || ctl=DOWN
+          state="HA $$ha (control $$ctl)"
+          if [ "$$state" != "$$last" ]; then
+            echo "$$(date -Iseconds) $$state" >> /var/log/traefik/ha-probe.log
+            last="$$state"
+          fi
+          sleep 10
+        done
+      '
+# --- Shared Global Subnet Matrix Definitions ---
+networks:
+  reverse_proxy:
+    external: true

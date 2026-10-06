@@ -1,0 +1,21 @@
+filenames: 
+  - /var/log/traefik/access.log
+labels:
+  type: traefik
+---
+# AppSec engine for this edge's Traefik bouncer (config.yml: crowdsec:7422 over
+# the reverse_proxy network; not published on the host). It checks the
+# bouncer's API key against the cluster LAPI this agent reports to and caches
+# it. An unreachable LAPI keeps the cached key, but a LAPI that answers 403
+# (e.g. its Galera member rejoining during a deploy) drops it: AppSec then
+# 401s and the bouncer 403s every untrusted request. 6h (default 1m) makes a
+# ~1 min LAPI outage very unlikely to land on a re-check (Bitwarden clients
+# log out on that 403). A rotated key keeps working up to 6h; restart to clear. It caches only
+# the key, not ban decisions. Alerts are credited to rpi5.
+source: appsec
+listen_addr: 0.0.0.0:7422
+auth_cache_duration: 6h
+appsec_config: crowdsecurity/virtual-patching
+name: rpi5AppSec
+labels:
+  type: appsec

@@ -1,0 +1,108 @@
+services:
+  influxdb:
+    cpu_shares: 90
+    container_name: influxdb
+    deploy:
+      resources:
+        limits:
+          memory: 4049M
+    environment:
+      - DOCKER_INFLUXDB_INIT_BUCKET=npmgrafstats
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_ORG=npmgrafstats
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_INIT_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_INIT_USERNAME}
+    hostname: influxdb
+    image: influxdb:2.9-alpine@sha256:5e250f6ab3e229d6ac27131fadf3c772f3a510875e8c6f22da017f39684bdcd6
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: /home/user/docker/influxdbv2/data
+        target: /var/lib/influxdb2
+      - type: bind
+        source: /home/user/docker/influxdbv2/etc
+        target: /etc/influxdb2
+    networks:
+      reverse_proxy:
+        ipv4_address: 172.20.0.7
+        ipv6_address: fd01:1234:10::7
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s      
+    privileged: false
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rpiinflux.rule=Host(`rpiinflux.local.example.com`)"
+      - "traefik.http.routers.rpiinflux.middlewares=https-redirect@file, default-headers@file, forward-auth-local"
+      - "traefik.http.routers.rpiinflux.entrypoints=https"
+      - "traefik.http.routers.rpiinflux.tls=true"
+      - "traefik.http.services.rpiinflux.loadbalancer.server.port=8086"
+      - "traefik.http.services.rpiinflux.loadbalancer.server.scheme=http"
+
+  traefikgraf:
+    container_name: traefikgraf
+    image: ghcr.io/priyankub/traefikgrafstats:latest@sha256:e1db248e21f271e00489618f39052312bef19f8fb511c13166a606cba76b96cd
+    restart: unless-stopped
+    environment:
+      - ABUSEIP_KEY=${ABUSEIP_KEY}
+      - INFLUX_HOST=http://influxdb:8086
+      - INFLUX_ORG=npmgrafstats
+      - INFLUX_BUCKET=npmgrafstats
+      - INFLUX_TOKEN=${INFLUX_TOKEN}
+      - INTERNAL_LOGS=true
+      - MONITORING_LOGS=true
+      #- LOG_LEVEL=DEBUG
+      #- VERBOSE_LOGGING=TRUE
+    hostname: traefikgraf
+    volumes:
+      - type: bind
+        source: /home/user/docker/traefik/log
+        target: /logs
+      - type: bind
+        source: /home/user/docker/goaccess/geoip
+        target: /geolite
+      - type: bind
+        source: /home/user/docker/traefikgraf
+        target: /data
+    networks:
+      reverse_proxy:
+        ipv4_address: 172.20.0.8
+        ipv6_address: fd01:1234:10::8
+
+    privileged: false
+    depends_on:
+      influxdb:
+        condition: service_healthy
+
+  geoipupdate:
+    cpu_shares: 90
+    container_name: geoipupdate
+    deploy:
+      resources:
+        limits:
+          memory: 4049M
+    environment:
+      - GEOIPUPDATE_ACCOUNT_ID=${MAXMIND_ACCOUNT_ID}
+      - GEOIPUPDATE_EDITION_IDS=GeoLite2-Country GeoLite2-City GeoLite2-ASN
+      - GEOIPUPDATE_FREQUENCY=24
+      - GEOIPUPDATE_LICENSE_KEY=${MAXMIND_LICENSE_KEY}
+      - TZ=America/Chicago
+    hostname: geoipupdate
+    image: ghcr.io/maxmind/geoipupdate:latest@sha256:51e70dd6f16cd3e4d845ac02d09940b10772a75b9d741427d235a78570923c1d
+    restart: always
+    volumes:
+      - type: bind
+        source: /home/user/docker/goaccess/geoip
+        target: /usr/share/GeoIP
+    networks:
+      reverse_proxy:
+        ipv4_address: 172.20.0.9
+        ipv6_address: fd01:1234:10::9
+    privileged: false
+
+networks:
+  reverse_proxy:
+    external: true

@@ -1,0 +1,76 @@
+api:
+  dashboard: true
+entryPoints:
+  http:
+    address: ":80"
+    forwardedHeaders:
+      trustedIPs:
+        - "127.0.0.1/32"
+        - "10.10.9.5/32"
+        - "10.10.9.2/32"
+        # KC_CF_STATIC_START
+        # KC_CF_STATIC_END   
+    http:
+      middlewares:
+        - crowdsec-stable-bouncer@file
+  https:
+    address: ":443"
+    forwardedHeaders:
+      trustedIPs:
+        - "127.0.0.1/32"
+        - "10.10.9.5/32"
+        - "10.10.9.2/32"
+        # KC_CF_STATIC_START
+        # KC_CF_STATIC_END      
+    http:
+      middlewares:
+        - crowdsec-stable-bouncer@file
+  metrics:
+    address: ":8312"
+metrics:
+  prometheus:
+    entryPoint: metrics
+serversTransport:
+  insecureSkipVerify: true
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+  file:
+    filename: /config.yml
+    watch: true
+certificatesResolvers:
+  cloudflare:
+    acme:
+      email: admin@example.com
+      storage: acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
+
+log:
+  level: ERROR
+accessLog:
+  filePath: /var/log/access.log
+  format: json
+  bufferingSize: 0
+  fields:
+    defaultMode: keep
+    headers:
+      defaultMode: drop
+      names:
+        User-Agent: keep
+        Cf-Connecting-Ip: keep
+        Cf-Ipcountry: keep
+        X-Forwarded-For: keep
+        X-Real-Ip: keep
+experimental:
+  plugins:
+    bouncer:
+      moduleName: github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin
+      version: v1.7.1
+hub:
+  tls:
+    insecure: true

@@ -1,0 +1,51 @@
+services:
+  adguard_unbound:
+    image: ghcr.io/priyankub/adguardhome_unbound:latest@sha256:9a3f8531d5e40e9e85d075a3abaf1ff764f9781d1e8ce39991c1c96a3b73365a
+    container_name: adguard_unbound
+    restart: unless-stopped
+    networks:
+      reverse_proxy:
+        ipv4_address: 172.20.0.3
+        ipv6_address: fd01:1234:10::3
+    # Bound to rpi5's static addresses (v4 + its ::5 ULA), not every address.
+    ports:
+      - "10.10.9.5:53:53/tcp"
+      - "10.10.9.5:53:53/udp"
+      - "10.10.9.5:853:853/tcp"   # DNS-over-TLS (DoT)
+      - "[fd00:1234:10:9::5]:53:53/tcp"
+      - "[fd00:1234:10:9::5]:53:53/udp"
+      - "[fd00:1234:10:9::5]:853:853/tcp"
+      # commenting these out now that initial setup and testing is over to limit port exposure
+      #- "180:80/tcp" 
+      #- "3000:3000/tcp"
+    volumes:
+      - /home/user/docker/dns/adguard_data:/opt/AdGuardHome/work
+      - /home/user/docker/dns/adguard_config:/opt/AdGuardHome/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.clusterguard.rule=Host(`clusterguard.example.com`) || Host(`clusterguard.local.example.com`)"
+      - "traefik.http.routers.clusterguard.middlewares=https-redirect@file, default-headers@file, forward-auth"
+      - "traefik.http.routers.clusterguard.entrypoints=https"
+      - "traefik.http.routers.clusterguard.tls=true"
+      - "traefik.http.services.clusterguard.loadbalancer.server.port=80"
+      - "traefik.http.services.clusterguard.loadbalancer.server.scheme=http"
+
+  # --- Automated Certificate Extractor ---
+  certs-dumper:
+    image: ghcr.io/kereis/traefik-certs-dumper:latest@sha256:21fd1c380bfe6a659593410d8fd5f845a7600b80386a7c1edb2218c377aff366
+    container_name: traefik_certs_dumper
+    restart: unless-stopped
+    network_mode: none # Completely isolated; needs no network stack to parse files
+    environment:
+      - WATCH=true
+      - TRAEFIK_VERSION=v3 # Explicitly targets your Traefik v3 JSON schema
+      - DOMAIN=clusterguard.example.com
+    volumes:
+      # Mount the active acme.json file from your Traefik folder (Adjust path if your acme.json sits in a different subfolder)
+      - /home/user/docker/traefik/data/acme.json:/traefik/acme.json:ro
+      # Dump the flat files straight into AdGuard's persistent config directory
+      - /home/user/docker/dns/adguard_config/certs:/output
+
+networks:
+  reverse_proxy:
+    external: true
