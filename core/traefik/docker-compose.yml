@@ -1,7 +1,7 @@
 services:
   # --- Init Container: Pulls Latest CrowdSec Bouncer Assets ---
   bouncer-assets-init:
-    image: alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+    image: alpine:latest@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
     container_name: bouncer-assets-init
     user: "root"
     environment:
@@ -37,7 +37,7 @@ services:
 
   # --- Main Edge Routing Gateway ---
   traefik:
-    image: traefik:v3.7@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0
+    image: traefik:v3.7@sha256:c8a121e4bb1347e8fd52657fab12f2cb70b68f8a018895e2068f92c9e519b9c2
     container_name: traefik
     restart: unless-stopped
     hostname: rpi5
@@ -116,7 +116,7 @@ services:
       - "traefik.http.services.traefik-metrics.loadbalancer.server.port=8312"
 # --- Containerized IaC Logrotate Sidecar ---
   logrotate:
-    image: alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+    image: alpine:latest@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
     container_name: traefik_logrotate
     restart: unless-stopped
     volumes:
@@ -142,7 +142,7 @@ services:
   # Dials HA across the Site Magic tunnel from the host's own IP (same path as
   # Traefik), with a same-tunnel control, and logs only state changes.
   ha-probe:
-    image: alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+    image: alpine:latest@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
     container_name: ha_probe
     restart: unless-stopped
     network_mode: host
