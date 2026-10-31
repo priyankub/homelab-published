@@ -1,7 +1,7 @@
 services:
   # --- Public Domain Forward Authentication Gateway ---
   traefik-forward-auth:
-    image: ghcr.io/priyankub/traefik-forward-auth-secure:latest@sha256:ef931567a253d42f80edf11724e19ea0ef3ec539e4849e5a775202aa13a382de
+    image: ghcr.io/priyankub/traefik-forward-auth-secure:latest@sha256:ed56d07da0fab534a3ece39546d88e92be7cd13ac9b49f4c14185faf345544c7
     container_name: traefik-forward-auth
     restart: unless-stopped
     networks:
@@ -48,7 +48,7 @@ services:
 
   # --- Local Namespace Forward Authentication Gateway (*.local) ---
   traefik-forward-auth-local:
-    image: ghcr.io/priyankub/traefik-forward-auth-secure:latest@sha256:ef931567a253d42f80edf11724e19ea0ef3ec539e4849e5a775202aa13a382de
+    image: ghcr.io/priyankub/traefik-forward-auth-secure:latest@sha256:ed56d07da0fab534a3ece39546d88e92be7cd13ac9b49f4c14185faf345544c7
     container_name: traefik-forward-auth-local
     restart: unless-stopped
     networks:

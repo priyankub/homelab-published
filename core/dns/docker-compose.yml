@@ -32,7 +32,7 @@ services:
 
   # --- Automated Certificate Extractor ---
   certs-dumper:
-    image: ghcr.io/kereis/traefik-certs-dumper:latest@sha256:21fd1c380bfe6a659593410d8fd5f845a7600b80386a7c1edb2218c377aff366
+    image: ghcr.io/kereis/traefik-certs-dumper:latest@sha256:de7b485f8d27d187e8cfbd6d94e9081f4e025df2eeae85668a178006a74a90db
     container_name: traefik_certs_dumper
     restart: unless-stopped
     network_mode: none # Completely isolated; needs no network stack to parse files
