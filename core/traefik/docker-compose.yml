@@ -1,7 +1,7 @@
 services:
   # --- Init Container: Pulls Latest CrowdSec Bouncer Assets ---
   bouncer-assets-init:
-    image: alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+    image: alpine:latest@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
     container_name: bouncer-assets-init
     user: "root"
     environment:
@@ -24,7 +24,7 @@ services:
 
   # --- Init Container: Waits for DNS to be reachable ---
   wait-for-dns:
-    image: busybox:latest@sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e
+    image: busybox:latest@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
     container_name: traefik-wait-for-dns
     networks:
       - reverse_proxy
@@ -37,7 +37,7 @@ services:
 
   # --- Main Edge Routing Gateway ---
   traefik:
-    image: traefik:v3.7@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0
+    image: traefik:v3.7@sha256:e9338a01a43389362bdef90afd4ff4a30dd6c0a2e1b0ce00c5e0f52659aa2d9c
     container_name: traefik
     restart: unless-stopped
     hostname: rpi5
@@ -116,7 +116,7 @@ services:
       - "traefik.http.services.traefik-metrics.loadbalancer.server.port=8312"
 # --- Containerized IaC Logrotate Sidecar ---
   logrotate:
-    image: alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+    image: alpine:latest@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
     container_name: traefik_logrotate
     restart: unless-stopped
     volumes:
@@ -142,7 +142,7 @@ services:
   # Dials HA across the Site Magic tunnel from the host's own IP (same path as
   # Traefik), with a same-tunnel control, and logs only state changes.
   ha-probe:
-    image: alpine:latest@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+    image: alpine:latest@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
     container_name: ha_probe
     restart: unless-stopped
     network_mode: host
