@@ -1,7 +1,7 @@
 services:
   # --- Init Container: Waits for DNS to be reachable ---
   wait-for-dns:
-    image: busybox:latest@sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e
+    image: busybox:latest@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
     container_name: crowdsec-wait-for-dns
     networks:
       - reverse_proxy
@@ -13,7 +13,7 @@ services:
       "
 
   crowdsec:
-    image: crowdsecurity/crowdsec:v1.8.1@sha256:0f2523fa61ef507f15d953045cface490cc880670c62f2755ced17524107f71a
+    image: crowdsecurity/crowdsec:v1.8.2@sha256:65b74942f7e7ed5c60fde4ac15fc4ba715904c398c8b16dd451f4907d90347d4
     container_name: crowdsec
     restart: unless-stopped
     depends_on:
