@@ -13,7 +13,7 @@ services:
       - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_INIT_PASSWORD}
       - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_INIT_USERNAME}
     hostname: influxdb
-    image: influxdb:2.9-alpine@sha256:5e250f6ab3e229d6ac27131fadf3c772f3a510875e8c6f22da017f39684bdcd6
+    image: influxdb:2.10-alpine@sha256:6df3d6c5b8530ed149ecdd66086d251f40295330aa0620ae0bfdbbf3ddab4fdc
     restart: unless-stopped
     volumes:
       - type: bind
@@ -44,7 +44,7 @@ services:
 
   traefikgraf:
     container_name: traefikgraf
-    image: ghcr.io/priyankub/traefikgrafstats:latest@sha256:e1db248e21f271e00489618f39052312bef19f8fb511c13166a606cba76b96cd
+    image: ghcr.io/priyankub/traefikgrafstats:latest@sha256:f4955e5ef3933b6241d554ae3905b6af5813829e64141156b458520a54ec678e
     restart: unless-stopped
     environment:
       - ABUSEIP_KEY=${ABUSEIP_KEY}
